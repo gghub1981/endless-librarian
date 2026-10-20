@@ -1,0 +1,12 @@
+# Downloaded and personal files stay on your Mac
+Community/
+My Effects/
+app/endless__preview.png
+app/favorites.json
+app/active.json
+app/*.tmp
+*.presets.json
+*.part
+__pycache__/
+*.log
+.DS_Store

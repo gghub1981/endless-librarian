@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Endless Librarian</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Colors and type follow polyend.com/plates */
+  :root {
+    --bg: #e8ecee; --card: #fff; --text: #444e5b; --ink: #000; --muted: #727c88;
+    --faint: #bdc5ce; --line: #d6dce0; --ok: #1f9d63; --bad: #d64545; --panel-w: 460px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 300 16px/1.45 "Albert Sans", -apple-system, "Helvetica Neue", sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: rgba(232,236,238,.92);
+    backdrop-filter: blur(10px); padding: 22px 30px 16px; transition: padding-right .25s; }
+  .top { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  h1 { font-size: 34px; font-weight: 300; margin: 0; color: var(--text); letter-spacing: -.01em; }
+  h1 b { font-weight: 800; color: var(--faint); letter-spacing: .02em; }
+  #search { flex: 1; min-width: 200px; max-width: 320px; background: #fff; color: var(--text); font: inherit;
+    border: 0; border-radius: 19px; padding: 9px 18px; outline: none; }
+  #search:focus { box-shadow: 0 0 0 2px var(--faint); }
+  #drive { margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px;
+    background: #fff; border-radius: 19px; padding: 8px 16px; }
+  #drive .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); flex: none; }
+  #drive.on .dot { background: var(--ok); }
+  #drive.on { color: var(--text); }
+  #keepalive { display: flex; align-items: center; gap: 8px; background: #fff; border: 0; border-radius: 19px;
+    padding: 8px 14px; font: inherit; font-size: 14px; color: var(--muted); cursor: pointer; }
+  #keepalive .sw { width: 30px; height: 18px; border-radius: 9px; background: var(--faint); position: relative; transition: background .2s; }
+  #keepalive .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
+    background: #fff; transition: transform .2s; }
+  #keepalive.on { color: var(--text); }
+  #keepalive.on .sw { background: var(--ok); }
+  #keepalive.on .sw::after { transform: translateX(12px); }
+  .loaded { margin-top: 14px; display: flex; align-items: center; gap: 14px; background: #fff; border-radius: 16px;
+    padding: 8px 18px 8px 8px; max-width: 520px; cursor: pointer; transition: box-shadow .15s; }
+  .loaded:hover { box-shadow: 0 6px 18px rgba(68,78,91,.14); }
+  .loaded.empty { cursor: default; padding: 12px 18px; box-shadow: none; }
+  .loaded-thumb { width: 104px; aspect-ratio: 178 / 103; border-radius: 10px; background: #dfe4e7 center/cover no-repeat; flex: none; }
+  .loaded-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+  .loaded-label { font-size: 12px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--ok); margin-right: 10px; }
+  .loaded-title { font-size: 20px; color: var(--ink); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .loaded-cats { font-size: 14px; color: var(--muted); }
+  .loaded-none { color: var(--muted); font-size: 15px; }
+  .loaded.empty .loaded-label { color: var(--muted); }
+  .loaded-open { font-size: 14px; color: var(--text); flex: none; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  .chip { background: transparent; border: 1px solid var(--faint); color: var(--text);
+    border-radius: 19px; padding: 5px 14px; font-size: 14px; cursor: pointer; transition: background .15s; }
+  .chip:hover { background: #fff; }
+  .chip.active { background: var(--text); border-color: var(--text); color: #fff; }
+  .chip small { opacity: .6; margin-left: 4px; }
+  .chip.ours { border-color: var(--text); font-weight: 500; }
+  .chip.ours.active { background: #000; border-color: #000; }
+  main { padding: 10px 30px 40px; transition: padding-right .25s; }
+  body.panel-open main, body.panel-open header, body.pin-open main, body.pin-open header { padding-right: calc(var(--panel-w) + 30px); }
+  body.panel-open.pin-open main, body.panel-open.pin-open header { padding-right: calc(2 * var(--panel-w) + 30px); }
+  body.pin-open { --panel-w: 420px; }
+  #count { color: var(--muted); margin-bottom: 14px; font-size: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; }
+  .card { background: var(--card); border-radius: 20px; overflow: hidden; cursor: pointer;
+    display: flex; flex-direction: column; transition: transform .15s, box-shadow .15s; }
+  .card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(68,78,91,.12); }
+  .card.selected { box-shadow: 0 0 0 2px var(--text); }
+  .thumb { aspect-ratio: 178 / 103; background: #dfe4e7 center/cover no-repeat; display: grid; place-items: center;
+    color: var(--faint); font-size: 48px; font-weight: 800; }
+  .thumbwrap { position: relative; }
+  button.fav { background: rgba(255,255,255,.92); border: 0; border-radius: 50%; width: 34px; height: 34px;
+    font-size: 18px; line-height: 1; color: var(--muted); cursor: pointer; transition: transform .15s; }
+  button.fav:hover { transform: scale(1.12); }
+  button.fav.on { color: #f2a900; }
+  .thumbwrap button.fav { position: absolute; top: 10px; right: 10px; z-index: 1; opacity: 0; }
+  .card:hover .thumbwrap button.fav, .thumbwrap button.fav.on { opacity: 1; }
+  .pane .row button.fav { background: var(--bg); }
+  .meta { padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  .title { font-size: 22px; color: var(--ink); line-height: 1.2; }
+  .cats { color: var(--muted); font-size: 16px; }
+  .card .actions { margin-top: auto; padding-top: 14px; display: flex; align-items: center; gap: 12px; }
+  button.load { background: #000; color: #fff; border: 0; border-radius: 19px; font: 400 14px "Albert Sans", sans-serif;
+    padding: 8px 18px; cursor: pointer; transition: opacity .2s; }
+  button.load:hover, button.btn:hover { opacity: .7; }
+  button.btn { background: #000; color: #fff; border: 0; border-radius: 19px; font: 400 14px "Albert Sans", sans-serif;
+    padding: 8px 18px; cursor: pointer; transition: opacity .2s; }
+  button.load:disabled { background: var(--faint); cursor: default; opacity: 1; }
+  .onpedal { color: var(--ok); font-size: 13px; font-weight: 500; }
+  /* side panels: #panel shows the clicked effect; #pin holds the one pinned with Compare, and
+     #panel then opens to its left so the two sit side by side */
+  .pane { position: fixed; top: 0; right: 0; bottom: 0; width: var(--panel-w); max-width: 100vw; background: #fff;
+    z-index: 10; transform: translateX(100%); transition: transform .25s, right .25s, visibility 0s .25s; overflow-y: auto;
+    box-shadow: -10px 0 30px rgba(68,78,91,.12); visibility: hidden; }
+  #pin { z-index: 11; }
+  body.panel-open #panel, body.pin-open #pin { transform: none; visibility: visible; transition: transform .25s, right .25s; }
+  body.pin-open #panel { right: var(--panel-w); }
+  button.compare.on { background: #000; color: #fff; }
+  .pane img, .pane .noimg { width: 100%; aspect-ratio: 178 / 103; object-fit: cover; display: block; background: #dfe4e7; }
+  .pane .body { padding: 24px 28px 32px; display: flex; flex-direction: column; gap: 12px; }
+  .pane h2 { margin: 0; font-size: 30px; font-weight: 300; color: var(--ink); line-height: 1.15; }
+  .pane pre { white-space: pre-wrap; font: inherit; font-size: 15px; margin: 4px 0 0; color: var(--text); }
+  .pane .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .pane a { color: var(--text); }
+  /* pedal view: controls drawn over endless__preview.png (940 x 1340), or pedal.svg when it's missing */
+  .pedal { position: relative; width: 100%; max-width: 400px; margin: 4px auto 0; aspect-ratio: 940 / 1340;
+    background: url("/pedal.png") center / contain no-repeat; user-select: none; }
+  .pedal .knob { position: absolute; width: 16%; aspect-ratio: 1; transform: translate(-50%, -50%); cursor: ns-resize; touch-action: none; }
+  .pedal .knob svg { width: 100%; height: 100%; overflow: visible; }
+  .pedal .knob .dot { fill: #8a929b; }
+  .pedal .klabel { position: absolute; width: 26%; transform: translateX(-50%); text-align: center; line-height: 1.15; }
+  .pedal .klabel span { display: block; font-size: 12px; font-weight: 500; color: var(--text); overflow-wrap: anywhere; }
+  .pedal .klabel .second { font-style: normal; color: #3d5fd0; }
+  .pedal .kdesc { position: absolute; width: 25%; transform: translateX(-50%); top: 37%; max-height: 26%; overflow: hidden;
+    font-size: 11px; line-height: 1.3; color: var(--muted); text-align: center;
+    -webkit-mask-image: linear-gradient(#000 80%, transparent); mask-image: linear-gradient(#000 80%, transparent); }
+  .pedal .sw { position: absolute; left: 38%; width: 28%; top: 74%; height: 21%; overflow: hidden; font-size: 11px;
+    line-height: 1.3; color: var(--text); -webkit-mask-image: linear-gradient(#000 80%, transparent); mask-image: linear-gradient(#000 80%, transparent); }
+  .pedal .sw b { color: var(--ink); font-weight: 600; }
+  .pedal .sw p { margin: 0 0 4px; }
+  .pedal .sw-mark { position: absolute; left: 24%; top: 83.2%; width: 15%; aspect-ratio: 1; transform: translate(-50%, -50%);
+    border: 2px solid #000; border-radius: 50%; pointer-events: none; }
+  .preset-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
+  .preset-bar select, .preset-bar input { font: inherit; font-size: 14px; border: 1px solid var(--line); border-radius: 19px;
+    padding: 7px 12px; color: var(--text); background: #fff; max-width: 190px; }
+  .preset-bar [hidden] { display: none; }
+  button.link { background: none; border: 0; padding: 0; color: var(--text); font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer; }
+  button.ghost { background: #fff; color: #000; border: 1px solid #000; border-radius: 19px; font: 400 14px "Albert Sans", sans-serif;
+    padding: 7px 16px; cursor: pointer; }
+  .pane .file { color: var(--muted); font-size: 12px; font-family: ui-monospace, Menlo, monospace; }
+  .close { position: absolute; top: 14px; right: 14px; width: 34px; height: 34px; border-radius: 50%; border: 0;
+    background: rgba(255,255,255,.9); color: #000; font-size: 22px; line-height: 1; cursor: pointer; }
+  @media (max-width: 900px) { body.panel-open main, body.panel-open header, body.pin-open main, body.pin-open header { padding-right: 30px; } }
+  #toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(90px);
+    background: #fff; color: var(--text); border-radius: 19px; padding: 12px 20px; box-shadow: 0 8px 24px rgba(0,0,0,.15);
+    border-left: 4px solid var(--faint); transition: transform .25s; z-index: 20; max-width: 90vw; }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.ok { border-left-color: var(--ok); } #toast.err { border-left-color: var(--bad); }
+  .empty { color: var(--muted); padding: 40px; text-align: center; font-size: 22px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <h1><b>ENDLESS</b> Librarian</h1>
+    <input id="search" type="search" placeholder="Search plates…" autocomplete="off">
+    <div id="drive"><span class="dot"></span><span id="driveText">Checking pedal…</span></div>
+    <button id="keepalive" title="Reads from the pedal every few seconds and stops macOS from idling the disk, so ENDLESS stays mounted."><span class="sw"></span>Keep Alive</button>
+  </div>
+  <div id="loaded" class="loaded empty"></div>
+  <div class="chips" id="chips"></div>
+</header>
+<main>
+  <div id="count"></div>
+  <div class="grid" id="grid"></div>
+</main>
+<aside id="panel" class="pane"><button class="close" aria-label="Close">×</button><div class="detail"></div></aside>
+<aside id="pin" class="pane"><button class="close" aria-label="Close">×</button><div class="detail"></div></aside>
+<div id="toast"></div>
+
+<script>
+const state = { plates: [], mineLabel: "My Effects", drive: { mounted: false, files: [] }, cat: "All", q: "", panes: { main: null, pin: null } };
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// Each side panel ("main" = #panel, "pin" = #pin) has its own plate, knob values and preset.
+const paneEl = k => $(k === "pin" ? "#pin" : "#panel");
+const paneOf = el => el.closest("#pin") ? "pin" : "main";
+const openIds = () => ["main", "pin"].map(k => state.panes[k] && state.panes[k].id).filter(Boolean);
+const fileUrl = p => "/files/" + p.split("/").map(encodeURIComponent).join("/");
+
+async function loadPlates() {
+  const r = await fetch("/api/plates");
+  const d = await r.json();
+  state.plates = d.plates.sort((a, b) => a.title.localeCompare(b.title));
+  state.mineLabel = d.mine_label || "My Effects";
+  setDrive(d.drive);
+  renderChips(); render();
+}
+
+function activeTitle(file) {
+  const p = state.plates.find(x => x.file === file);
+  return p ? p.title : file;
+}
+
+function setDrive(d) {
+  state.drive = d;
+  $("#drive").classList.toggle("on", d.mounted);
+  $("#driveText").textContent = d.mounted
+    ? "ENDLESS connected"
+    : "ENDLESS not connected";
+  const ka = d.keepalive;
+  if (ka) {
+    $("#keepalive").classList.toggle("on", ka.on);
+    const drops = ka.events.filter(e => e.text === "ENDLESS disconnected");
+    const t = x => new Date(x * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    $("#keepalive").title = "Reads from the pedal every " + ka.every + "s and stops macOS from idling the disk.\n\n" +
+      (ka.events.length ? ka.events.map(e => t(e.t) + "  " + e.text).join("\n") : "No events yet.");
+    if (!d.mounted && drops.length) $("#driveText").textContent += " · dropped at " + t(drops[drops.length - 1].t);
+    // Turn Keep Alive back on after a server restart if it was on before.
+    if (!ka.on && wantKeepAlive() && !state.kaRestored) { state.kaRestored = true; setKeepAlive(true); }
+    state.kaRestored = true;
+  }
+  renderLoaded(d);
+  document.querySelectorAll("button.load").forEach(b => b.disabled = !d.mounted);
+  document.querySelectorAll("[data-onpedal]").forEach(el =>
+    el.hidden = el.dataset.onpedal !== d.active);
+}
+
+// The strip under the title: the effect currently loaded in the pedal; click opens its panel.
+function renderLoaded(d) {
+  const el = $("#loaded");
+  const p = d.active ? state.plates.find(x => x.id === d.active_id) || state.plates.find(x => x.file === d.active) : null;
+  const key = d.mounted + "|" + (d.active || "") + "|" + (p ? p.id : "");
+  if (el.dataset.key === key) return;  // polled every 3s; only redraw on change
+  el.dataset.key = key;
+  el.classList.toggle("empty", !p);
+  el.dataset.id = p ? p.id : "";
+  el.title = p ? "Show this effect's info" : "";
+  const label = `<span class="loaded-label">In the pedal</span>`;
+  if (!d.active) el.innerHTML = `${label}<span class="loaded-none">No effect loaded</span>`;
+  else if (!p) el.innerHTML = `${label}<span class="loaded-title">${esc(d.active)}</span><span class="loaded-none">not in the library</span>`;
+  else el.innerHTML = `
+    <span class="loaded-thumb" ${p.image ? `style="background-image:url('${fileUrl(p.image)}')"` : ""}></span>
+    <span class="loaded-text">${label}<span class="loaded-title">${esc(p.title)}</span>
+      <span class="loaded-cats">${esc(p.categories.join(" · "))}${d.mounted ? "" : " · pedal not connected"}</span></span>
+    <span class="loaded-open">Info ›</span>`;
+}
+
+function renderChips() {
+  const counts = {};
+  state.plates.forEach(p => p.categories.forEach(c => counts[c] = (counts[c] || 0) + 1));
+  const OURS = state.mineLabel;  // your own effects folder, always shown right after Favorites
+  const FAV = "Favorites";
+  counts[FAV] = state.plates.filter(p => p.favorite).length;
+  const cats = ["All", FAV, OURS, ...Object.keys(counts).filter(c => c !== OURS && c !== FAV).sort()];
+  const sources = [...new Set(state.plates.map(p => p.source).filter(Boolean))];
+  $("#chips").innerHTML = cats.map(c =>
+    `<span class="chip${c === state.cat ? " active" : ""}${c === OURS || c === FAV ? " ours" : ""}" data-cat="${esc(c)}">${c === FAV ? "★ " : ""}${esc(c)}<small>${c === "All" ? state.plates.length : counts[c] || 0}</small></span>`
+  ).join("") + (sources.length > 1 ? sources.map(s =>
+    `<span class="chip${"src:" + s === state.cat ? " active" : ""}" data-cat="src:${esc(s)}">📁 ${esc(s)}</span>`).join("") : "");
+}
+
+function filtered() {
+  const q = state.q.toLowerCase();
+  return state.plates.filter(p => {
+    if (state.cat.startsWith("src:")) { if (p.source !== state.cat.slice(4)) return false; }
+    else if (state.cat === "Favorites") { if (!p.favorite) return false; }
+    else if (state.cat !== "All" && !p.categories.includes(state.cat)) return false;
+    return !q || (p.title + " " + p.categories.join(" ") + " " + p.types.join(" ") + " " + p.text + " " + p.knobs.map(k => k.name + " " + k.desc).join(" ")).toLowerCase().includes(q);
+  });
+}
+
+function favButton(p) {
+  return `<button class="fav${p.favorite ? " on" : ""}" data-fav="${esc(p.id)}" title="${p.favorite ? "Remove from" : "Add to"} favorites">${p.favorite ? "★" : "☆"}</button>`;
+}
+
+function loadButton(p) {
+  return `<button class="load" data-id="${esc(p.id)}" ${state.drive.mounted ? "" : "disabled"}>Load Effect</button>`;
+}
+
+function render() {
+  const list = filtered();
+  $("#count").textContent = `${list.length} plate${list.length === 1 ? "" : "s"}`;
+  $("#grid").innerHTML = list.length ? list.map(p => `
+    <div class="card${openIds().includes(p.id) ? " selected" : ""}" data-id="${esc(p.id)}">
+      <div class="thumbwrap">${favButton(p)}<div class="thumb" ${p.image ? `style="background-image:url('${fileUrl(p.image)}')"` : ""}>${p.image ? "" : esc(p.title[0] || "?")}</div></div>
+      <div class="meta">
+        <div class="title">${esc(p.title)}</div>
+        <div class="cats">${esc(p.categories.join(" · "))}${p.presets.length ? ` · ${p.presets.length} preset${p.presets.length > 1 ? "s" : ""}` : ""}</div>
+        <div class="actions">${loadButton(p)}
+          <span class="onpedal" data-onpedal="${esc(p.file)}" ${state.drive.active === p.file ? "" : "hidden"}>● Active</span></div>
+      </div>
+    </div>`).join("") : `<div class="empty">No plates match.</div>`;
+}
+
+function openDetail(id, k = "main") {
+  if (!state.plates.some(x => x.id === id)) return;
+  const s = state.panes[k];
+  const fresh = !s || s.id !== id;
+  if (fresh) state.panes[k] = { id, knobs: [null, null, null], presetIdx: null };
+  renderPane(k);
+  if (fresh) paneEl(k).scrollTop = 0;
+  updateLayout();
+}
+
+function renderPane(k) {
+  const s = state.panes[k];
+  const p = s && state.plates.find(x => x.id === s.id);
+  if (!p) return;
+  paneEl(k).querySelector(".detail").innerHTML = `
+    ${p.image ? `<img src="${fileUrl(p.image)}" alt="">` : `<div class="noimg"></div>`}
+    <div class="body">
+      <h2>${esc(p.title)}</h2>
+      <div class="cats">${esc(p.categories.join(" · "))}</div>
+      <div class="row">${loadButton(p)} ${favButton(p)}
+        <button class="ghost compare${k === "pin" ? " on" : ""}" data-compare title="${k === "pin" ? "Stop comparing" : "Keep this panel open and compare it with the next effect you click"}">Compare</button>
+        <span class="onpedal" data-onpedal="${esc(p.file)}" ${state.drive.active === p.file ? "" : "hidden"}>● Active</span></div>
+      <pre>${esc(p.text || "No info text for this plate.")}</pre>
+      ${pedalView(p, s)}
+      <div class="row">${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">Polyend page ↗</a>` : ""}
+        <span class="file">${esc(p.id)} · ${(p.size / 1024).toFixed(1)} KB</span></div>
+    </div>`;
+}
+
+function updateLayout() {
+  document.body.classList.toggle("panel-open", !!state.panes.main);
+  document.body.classList.toggle("pin-open", !!state.panes.pin);
+  const ids = openIds();
+  document.querySelectorAll(".card").forEach(c => c.classList.toggle("selected", ids.includes(c.dataset.id)));
+}
+
+// Redraw every panel showing this plate (both can show the same one).
+function refreshPanes(id) {
+  ["main", "pin"].forEach(k => { if (state.panes[k] && state.panes[k].id === id) renderPane(k); });
+}
+
+// Compare on the main panel pins it; the next effect clicked opens beside it.
+// Compare on the pinned panel unpins it.
+function toggleCompare(k) {
+  if (k === "main") {
+    state.panes.pin = state.panes.main; state.panes.main = null;
+    renderPane("pin");
+    toast("Pinned. Click another effect to compare it side by side.", "ok");
+  } else if (!state.panes.main) {
+    state.panes.main = state.panes.pin; state.panes.pin = null;
+    renderPane("main");
+  } else state.panes.pin = null;
+  updateLayout();
+}
+
+// Pedal view: the 3 knobs and the * footswitch drawn over the pedal image. Knob values
+// are percentages; drag a knob up/down (or scroll on it) to set it. Presets save the
+// three values per plate, next to the .endl as <name>.presets.json.
+const KNOB_POS = [[24, 22], [50.3, 22.2], [77.1, 22]];  // knob centres, % of the image
+
+function knobSvg(v) {  // a small gray dot on the knob face at the value's angle (-135°..+135°); nothing when unset
+  if (v == null) return `<svg viewBox="0 0 100 100"></svg>`;
+  const a = (-135 + 2.7 * v) * Math.PI / 180;
+  return `<svg viewBox="0 0 100 100"><circle class="dot" r="5.5" cx="${(50 + 34 * Math.sin(a)).toFixed(1)}" cy="${(50 - 34 * Math.cos(a)).toFixed(1)}"/></svg>`;
+}
+
+// "Time / Feedback": primary function, then the secondary one (short press) in cobalt like the LED.
+function knobName(name) {
+  const [first, ...rest] = name.split(" / ");
+  return esc(first) + (rest.length ? `<i class="second"> / ${esc(rest.join(" / "))}</i>` : "");
+}
+
+function pedalView(p, s) {
+  const v = s.knobs;
+  const sel = s.presetIdx;
+  return `<div class="pedal">
+      ${p.knobs.map((k, i) => `
+        <div class="knob" data-knob="${i}" style="left:${KNOB_POS[i][0]}%;top:${KNOB_POS[i][1]}%" title="Drag up/down or scroll to set ${esc(k.name)}">${knobSvg(v[i])}</div>
+        <div class="klabel" style="left:${KNOB_POS[i][0]}%;top:30%"><span>${knobName(k.name)}</span></div>
+        ${k.desc ? `<div class="kdesc" style="left:${KNOB_POS[i][0]}%" title="${esc(k.desc)}">${esc(k.desc)}</div>` : ""}`).join("")}
+      ${p.switch.length ? `<div class="sw-mark"></div>
+        <div class="sw" title="${esc(p.switch.map(s => s.name + ": " + s.desc).join("\n"))}">
+          ${p.switch.map(s => `<p><b>${esc(s.name)}</b>${s.desc ? " " + esc(s.desc) : ""}</p>`).join("")}</div>` : ""}
+    </div>
+    <div class="preset-bar">
+      <button class="ghost" data-preset-new>New preset</button>
+      <span class="preset-new" hidden><input class="preset-name" placeholder="Preset name" autocomplete="off">
+        <button class="btn" data-preset-save>Save</button> <button class="link" data-preset-cancel>Cancel</button></span>
+      <select class="preset-load" ${p.presets.length ? "" : "disabled"}>
+        <option value="">${p.presets.length ? "Load preset…" : "No presets yet"}</option>
+        ${p.presets.map((pr, i) => `<option value="${i}" ${i === sel ? "selected" : ""}>${esc(pr.name)}</option>`).join("")}
+      </select>
+      ${sel != null && p.presets[sel] ? `<button class="link" data-preset-del>Delete</button>` : ""}
+    </div>`;
+}
+
+function setKnob(k, i, v) {
+  v = Math.max(0, Math.min(100, Math.round(v)));
+  state.panes[k].knobs[i] = v;
+  const el = paneEl(k).querySelector(`[data-knob="${i}"]`);
+  if (el) el.innerHTML = knobSvg(v);
+}
+
+async function savePresets(p) {
+  try {
+    const r = await fetch("/api/presets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: p.id, presets: p.presets }) });
+    if (!(await r.json()).ok) throw new Error();
+  } catch (e) { toast("Couldn't save the preset. Is the librarian still running?", "err"); }
+  render(); refreshPanes(p.id);
+}
+
+function presetAction(btn) {
+  const k = paneOf(btn), s = state.panes[k], root = paneEl(k);
+  const p = state.plates.find(x => x.id === s.id);
+  if (btn.hasAttribute("data-preset-new")) {
+    root.querySelector(".preset-new").hidden = false; btn.hidden = true; root.querySelector(".preset-name").focus();
+  } else if (btn.hasAttribute("data-preset-cancel")) {
+    renderPane(k);
+  } else if (btn.hasAttribute("data-preset-save")) {
+    const name = root.querySelector(".preset-name").value.trim() || "Preset " + (p.presets.length + 1);
+    const pr = { name, values: s.knobs.map(v => v ?? 50) };  // knobs never touched count as noon
+    const same = p.presets.findIndex(x => x.name === name);  // same name: overwrite
+    if (same >= 0) p.presets[same] = pr; else p.presets.push(pr);
+    s.presetIdx = same >= 0 ? same : p.presets.length - 1;
+    savePresets(p);
+    toast(`Saved preset “${name}”.`, "ok");
+  } else if (btn.hasAttribute("data-preset-del")) {
+    p.presets.splice(s.presetIdx, 1);
+    s.presetIdx = null;
+    savePresets(p);
+  }
+}
+
+document.addEventListener("change", e => {
+  if (!e.target.classList.contains("preset-load") || e.target.value === "") return;
+  const k = paneOf(e.target), s = state.panes[k];
+  const p = state.plates.find(x => x.id === s.id);
+  s.presetIdx = Number(e.target.value);
+  s.knobs = [...p.presets[s.presetIdx].values];
+  renderPane(k);
+});
+document.addEventListener("keydown", e => {
+  if (e.target.classList.contains("preset-name") && e.key === "Enter") presetAction(paneEl(paneOf(e.target)).querySelector("[data-preset-save]"));
+});
+
+// Knob dragging: 1% per 2px of vertical movement; scroll wheel works too.
+let drag = null;
+document.addEventListener("pointerdown", e => {
+  const k = e.target.closest("[data-knob]"); if (!k) return;
+  const i = Number(k.dataset.knob), pane = paneOf(k);
+  drag = { pane, i, y: e.clientY, v: state.panes[pane].knobs[i] ?? 50 };
+  k.setPointerCapture(e.pointerId); e.preventDefault();
+});
+document.addEventListener("pointermove", e => { if (drag) setKnob(drag.pane, drag.i, drag.v + (drag.y - e.clientY) / 2); });
+document.addEventListener("pointerup", () => { drag = null; });
+document.addEventListener("wheel", e => {
+  const k = e.target.closest("[data-knob]"); if (!k) return;
+  e.preventDefault();
+  const i = Number(k.dataset.knob), pane = paneOf(k);
+  setKnob(pane, i, (state.panes[pane].knobs[i] ?? 50) - Math.sign(e.deltaY) * 2);
+}, { passive: false });
+
+function closePanel(k = state.panes.main ? "main" : "pin") {
+  state.panes[k] = null;
+  updateLayout();
+}
+
+let toastTimer;
+function toast(msg, kind) {
+  const t = $("#toast");
+  t.textContent = msg; t.className = "show " + kind;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.className = "", 4500);
+}
+
+async function loadEffect(id, btn) {
+  btn.disabled = true; const label = btn.textContent; btn.textContent = "Loading…";
+  try {
+    const r = await fetch("/api/load", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    const d = await r.json();
+    if (d.ok) toast(`Copied to ${d.dest}. The pedal will remount and load it.`, "ok");
+    else toast(d.error, "err");
+  } catch (e) { toast("Can't reach the librarian server. Is it still running?", "err"); }
+  btn.textContent = label; btn.disabled = !state.drive.mounted;
+  pollDrive();
+}
+
+function wantKeepAlive() {
+  try { return localStorage.getItem("keepalive") === "1"; } catch (e) { return false; }
+}
+
+async function setKeepAlive(on) {
+  try { localStorage.setItem("keepalive", on ? "1" : "0"); } catch (e) {}
+  try {
+    await fetch("/api/keepalive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ on }) });
+    toast(on ? "Keep Alive is on. The app will keep reading from the pedal so it stays mounted." : "Keep Alive is off.", "ok");
+  } catch (e) { toast("Can't reach the librarian server. Is it still running?", "err"); }
+  pollDrive();
+}
+
+$("#keepalive").addEventListener("click", () => setKeepAlive(!$("#keepalive").classList.contains("on")));
+
+async function toggleFavorite(id) {
+  const p = state.plates.find(x => x.id === id);
+  if (!p) return;
+  p.favorite = !p.favorite;
+  try {
+    await fetch("/api/favorite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, on: p.favorite }) });
+  } catch (e) { p.favorite = !p.favorite; toast("Can't reach the librarian server. Is it still running?", "err"); }
+  renderChips(); render();
+  refreshPanes(id);
+}
+
+async function pollDrive() {
+  try { setDrive(await (await fetch("/api/drive")).json()); } catch (e) {}
+}
+
+$("#search").addEventListener("input", e => { state.q = e.target.value; render(); });
+$("#chips").addEventListener("click", e => {
+  const c = e.target.closest(".chip"); if (!c) return;
+  state.cat = c.dataset.cat; renderChips(); render();
+});
+$("#loaded").addEventListener("click", () => { const id = $("#loaded").dataset.id; if (id) openDetail(id); });
+document.addEventListener("click", e => {
+  const pb = e.target.closest("[data-preset-new],[data-preset-save],[data-preset-del],[data-preset-cancel]");
+  if (pb) return presetAction(pb);
+  const f = e.target.closest("button.fav");
+  if (f) { e.stopPropagation(); return toggleFavorite(f.dataset.fav); }
+  const cmp = e.target.closest("[data-compare]");
+  if (cmp) return toggleCompare(paneOf(cmp));
+  const b = e.target.closest("button.load");
+  if (b) { e.stopPropagation(); return loadEffect(b.dataset.id, b); }
+  const card = e.target.closest(".card");
+  if (card) return openDetail(card.dataset.id);
+  if (e.target.classList.contains("close")) closePanel(paneOf(e.target));
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape") closePanel(); });
+setInterval(pollDrive, 3000);
+loadPlates().catch(() => { $("#grid").innerHTML = `<div class="empty">Couldn't load plates. Start the librarian with “Start Librarian.command”.</div>`; });
+</script>
+</body>
+</html>
